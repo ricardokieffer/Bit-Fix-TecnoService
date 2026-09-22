@@ -34,7 +34,7 @@
 
 ```text
 /
-├── docs/                                  # Documentación técnica e informes
+├── Docs/                                  # Documentación técnica e informes
 │   ├── Informe_Hito2_TecnoService.pdf    # Informe consolidado del Hito 2
 │   ├── Diccionario_de_Datos_TecnoService.pdf # Diccionario de Datos del SGBD
 ├── sql/                                   # Scripts de Base de Datos
@@ -53,5 +53,5 @@
 
 * **Lenguaje:** Python 3.12+
 * **Interfaz Gráfica:** Tkinter / `ttk` (`ttk.Notebook`, `ttk.LabelFrame`, `ttk.Treeview`)
-* **Base de Datos:** SQL Estándar (PostgreSQL / MySQL)
+* **Base de Datos:** SQL Estándar (PostgreSQL)
 * **Control de Versiones:** Git & GitHub
