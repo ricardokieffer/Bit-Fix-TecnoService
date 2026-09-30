@@ -34,3 +34,4 @@ class ConexionBD:
         except psycopg2.Error as e:
             print(f"Error al conectar con la base de datos: {e}")
             return None
+
