@@ -22,11 +22,12 @@
 
 **TecnoService** es una aplicación de escritorio diseñada para optimizar la gestión operativa de un taller de servicio técnico informático. El sistema abarca desde el ingreso y recepción de equipos informáticos (PCs, notebooks, impresoras) hasta el diagnóstico técnico, la asignación de repuestos del inventario y la liquidación final del servicio.
 
-### 🚀 Funcionalidades Principales (4 Pestañas)
-1. **Ingresos y Clientes:** Alta y gestión de datos de clientes, registro detallado del equipo, carga de la falla reportada, asignación de técnico responsable y presupuesto inicial estimado.
-2. **Órdenes de Trabajo (Taller):** Actualización del diagnóstico por parte del técnico, cambio de estado del servicio, y asociación de repuestos consumidos especificando cantidades.
-3. **Gestión de Técnicos (ABM):** Registro de profesionales habilitados, especialidad y estado de disponibilidad.
-4. **Catálogo de Repuestos e Inventario (ABM):** Control de stock de componentes, precios unitarios y alertas visuales de stock mínimo para reabastecimiento.
+### 🚀 Funcionalidades Principales (5 Pestañas)
+1. **Clientes (ABM):** Alta, modificación y baja de clientes del taller.
+2. **Ingresos:** Registro de cliente y equipo, carga de la falla reportada, asignación de técnico responsable y presupuesto inicial estimado.
+3. **Órdenes de Trabajo (Taller):** Actualización del diagnóstico, cambio de estado del servicio, aprobación del presupuesto por parte del cliente (Pendiente/Aceptado/Rechazado) y asociación de repuestos consumidos con control de stock disponible.
+4. **Gestión de Técnicos (ABM):** Alta, modificación y baja de profesionales habilitados, especialidad y estado de disponibilidad.
+5. **Catálogo de Repuestos e Inventario (ABM):** Alta, modificación y baja de componentes, precios unitarios y alertas visuales de stock mínimo.
 
 ---
 
@@ -35,8 +36,10 @@
 ```text
 /
 ├── Docs/                                  # Documentación técnica e informes
-│   ├── Informe_Hito2_TecnoService.pdf    # Informe consolidado del Hito 2
-│   ├── Diccionario_de_Datos_TecnoService.pdf # Diccionario de Datos del SGBD
+│   ├── Informe_Hito2_TecnoService.pdf
+│   ├── Diccionario_de_Datos_TecnoService.pdf
+│   ├── Minuta_de_Requerimientos_TecnoService.pdf
+│   └── Modelo_Relacional_y_Normalizacion_TecnoService.pdf
 ├── sql/                                   # Scripts de Base de Datos
 │   └── script_tecnoservice.sql            # Script DDL (Tablas, Claves, Checks, Roles e Inserts)
 ├── src/                                   # Código Fuente Python (Tkinter)
