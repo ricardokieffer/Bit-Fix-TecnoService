@@ -1,240 +1,208 @@
-# Capa de Acceso a Datos (Data Access Layer) - Mock
-# En este Hito 2 la aplicación es un prototipo navegable "aún sin conexión
-# a la base" (según lineamientos de cátedra): los datos viven en memoria.
-# La conexión real a PostgreSQL (conexion.py) se integrará en el Hito 3.
-#
-# Los valores de tipo/especialidad/estado usados acá son EXACTAMENTE los
-# mismos que los CHECK del script_tecnoservice.sql, para que al migrar a la
-# base real ningún dato mock viole una restricción.
-#
-# Reglas de negocio de la Minuta de Requerimientos reflejadas acá (y en el
-# script SQL, como trigger / CHECK) para que el prototipo se comporte igual
-# a como la base real se va a comportar en el Hito 3:
-#   - No se puede usar un repuesto si no hay stock suficiente (ver
-#     usar_repuesto_en_reparacion). En la base real esto lo resuelve el
-#     trigger trg_validar_stock.
-#   - No se puede pasar una orden a "En Reparación"/"Terminado"/"Entregado"
-#     si el presupuesto no fue Aceptado (ver puede_avanzar_estado). En la
-#     base real esto lo resuelve el CHECK chk_presupuesto_aprobado_para_reparar.
+-- TecnoService PC - Hito 3 (Evidencia 6)
+-- Equipo Bit&Fix - PostgreSQL
 
-TIPOS_EQUIPO = ["Notebook", "PC de Escritorio", "Impresora", "All in One", "Otro"]
-ESPECIALIDADES_TECNICO = ["Hardware", "Software", "Electrónica", "General"]
-ESTADOS_TECNICO = ["Activo", "Inactivo"]
-ESTADOS_REPARACION = ["Ingresada", "En Diagnóstico", "Esperando Repuesto", "En Reparación", "Terminado", "Entregado"]
-ESTADOS_PRESUPUESTO = ["Pendiente", "Aceptado", "Rechazado"]
-ESTADOS_QUE_REQUIEREN_PRESUPUESTO_ACEPTADO = {"En Reparación", "Terminado", "Entregado"}
+DROP TABLE IF EXISTS detalle_reparacion CASCADE;
+DROP TABLE IF EXISTS reparacion CASCADE;
+DROP TABLE IF EXISTS equipo CASCADE;
+DROP TABLE IF EXISTS cliente CASCADE;
+DROP TABLE IF EXISTS tecnico CASCADE;
+DROP TABLE IF EXISTS repuesto CASCADE;
 
+-- cliente
+CREATE TABLE cliente (
+    id_cliente SERIAL PRIMARY KEY,
+    dni VARCHAR(15) UNIQUE NOT NULL,
+    nombre VARCHAR(100) NOT NULL,
+    telefono VARCHAR(30) NOT NULL
+);
 
-class StockInsuficienteError(Exception):
-    pass
+-- equipo
+CREATE TABLE equipo (
+    id_equipo SERIAL PRIMARY KEY,
+    tipo VARCHAR(30) NOT NULL CHECK (tipo IN ('Notebook', 'PC de Escritorio', 'Impresora', 'All in One', 'Otro')),
+    marca VARCHAR(50) NOT NULL,
+    modelo VARCHAR(50) NOT NULL,
+    numero_serie VARCHAR(50) UNIQUE,
+    id_cliente INT NOT NULL,
+    CONSTRAINT fk_equipo_cliente FOREIGN KEY (id_cliente)
+        REFERENCES cliente(id_cliente) ON DELETE CASCADE
+);
 
+-- tecnico
+CREATE TABLE tecnico (
+    id_tecnico SERIAL PRIMARY KEY,
+    legajo VARCHAR(20) UNIQUE NOT NULL,
+    dni VARCHAR(15) UNIQUE NOT NULL,
+    nombre VARCHAR(50) NOT NULL,
+    apellido VARCHAR(50) NOT NULL,
+    especialidad VARCHAR(50) NOT NULL CHECK (especialidad IN ('Hardware', 'Software', 'Electrónica', 'General')),
+    estado VARCHAR(20) DEFAULT 'Activo' CHECK (estado IN ('Activo', 'Inactivo'))
+);
 
-class AccesoDatosMock:
-    def __init__(self):
-        self.clientes = [
-            {"id": 1, "dni": "35123456", "nombre": "García, Ana Maria", "telefono": "351-4567890"},
-            {"id": 2, "dni": "38987654", "nombre": "Martínez, Carlos", "telefono": "351-6543210"},
-            {"id": 3, "dni": "32111222", "nombre": "López, Sofía", "telefono": "351-7890123"}
-        ]
+-- reparacion
+CREATE TABLE reparacion (
+    id_reparacion SERIAL PRIMARY KEY,
+    fecha_ingreso DATE NOT NULL DEFAULT CURRENT_DATE,
+    fecha_salida DATE,
+    falla_reportada TEXT NOT NULL,
+    diagnostico TEXT,
+    costo_estimado NUMERIC(10, 2) NOT NULL DEFAULT 0.00 CHECK (costo_estimado >= 0),
+    costo_total NUMERIC(10, 2) DEFAULT 0.00 CHECK (costo_total >= 0),
+    estado VARCHAR(30) DEFAULT 'Ingresada'
+        CHECK (estado IN ('Ingresada', 'En Diagnóstico', 'Esperando Repuesto', 'En Reparación', 'Terminado', 'Entregado')),
+    presupuesto_aprobado VARCHAR(20) DEFAULT 'Pendiente'
+        CHECK (presupuesto_aprobado IN ('Pendiente', 'Aceptado', 'Rechazado')),
+    id_equipo INT NOT NULL,
+    id_tecnico INT NOT NULL,
+    CONSTRAINT fk_reparacion_equipo FOREIGN KEY (id_equipo)
+        REFERENCES equipo(id_equipo) ON DELETE CASCADE,
+    CONSTRAINT fk_reparacion_tecnico FOREIGN KEY (id_tecnico)
+        REFERENCES tecnico(id_tecnico) ON DELETE RESTRICT,
+    CONSTRAINT chk_fechas CHECK (fecha_salida IS NULL OR fecha_salida >= fecha_ingreso),
+    -- no avanzar sin presupuesto aceptado
+    CONSTRAINT chk_presupuesto_aprobado_para_reparar CHECK (
+        presupuesto_aprobado = 'Aceptado' OR estado NOT IN ('En Reparación', 'Terminado', 'Entregado')
+    )
+);
 
-        # EQUIPO: solo datos del hardware (la falla y el estado viven en REPARACION)
-        self.equipos = [
-            {"id": 1, "tipo": "Notebook", "marca": "Lenovo", "modelo": "IdeaPad 3", "serie": "NV123456", "id_cliente": 1, "cliente": "García, Ana Maria"},
-            {"id": 2, "tipo": "PC de Escritorio", "marca": "Exo", "modelo": "Ready", "serie": "EX987654", "id_cliente": 2, "cliente": "Martínez, Carlos"},
-            {"id": 3, "tipo": "Impresora", "marca": "Epson", "modelo": "L3210", "serie": "EP456789", "id_cliente": 3, "cliente": "López, Sofía"}
-        ]
+-- repuesto
+CREATE TABLE repuesto (
+    id_repuesto SERIAL PRIMARY KEY,
+    codigo VARCHAR(20) UNIQUE NOT NULL,
+    descripcion VARCHAR(150) NOT NULL,
+    precio_unitario NUMERIC(10, 2) NOT NULL CHECK (precio_unitario > 0),
+    stock INT NOT NULL DEFAULT 0 CHECK (stock >= 0),
+    stock_minimo INT NOT NULL DEFAULT 2 CHECK (stock_minimo >= 0)
+);
 
-        self.tecnicos = [
-            {"id": 1, "legajo": "TEC-001", "dni": "33444555", "nombre": "Gonzalo", "apellido": "Pérez", "especialidad": "Hardware", "estado": "Activo"},
-            {"id": 2, "legajo": "TEC-002", "dni": "36777888", "nombre": "Mariana", "apellido": "Ríos", "especialidad": "Software", "estado": "Activo"},
-            {"id": 3, "legajo": "TEC-003", "dni": "40111222", "nombre": "Esteban", "apellido": "Fernández", "especialidad": "General", "estado": "Inactivo"}
-        ]
+-- detalle_reparacion
+CREATE TABLE detalle_reparacion (
+    id_reparacion INT NOT NULL,
+    id_repuesto INT NOT NULL,
+    cantidad INT NOT NULL DEFAULT 1 CHECK (cantidad > 0),
+    precio_unitario_aplicado NUMERIC(10, 2) NOT NULL CHECK (precio_unitario_aplicado > 0),
+    PRIMARY KEY (id_reparacion, id_repuesto),
+    CONSTRAINT fk_detalle_reparacion FOREIGN KEY (id_reparacion)
+        REFERENCES reparacion(id_reparacion) ON DELETE CASCADE,
+    CONSTRAINT fk_detalle_repuesto FOREIGN KEY (id_repuesto)
+        REFERENCES repuesto(id_repuesto) ON DELETE RESTRICT
+);
 
-        self.repuestos = [
-            {"id": 1, "codigo": "REP-001", "descripcion": "Disco SSD Kingston 480GB SATA3", "precio": 45000.00, "stock": 8, "minimo": 3},
-            {"id": 2, "codigo": "REP-002", "descripcion": "Memoria RAM DDR4 8GB 3200MHz", "precio": 32000.00, "stock": 12, "minimo": 5},
-            {"id": 3, "codigo": "REP-003", "descripcion": "Fuente de Alimentación LNC 600W", "precio": 58000.00, "stock": 1, "minimo": 2},
-            {"id": 4, "codigo": "REP-004", "descripcion": "Pasta Térmica Arctic MX-4 4g", "precio": 12000.00, "stock": 15, "minimo": 4}
-        ]
+-- trigger: controla el stock y lo descuenta
+CREATE OR REPLACE FUNCTION fn_validar_y_descontar_stock()
+RETURNS TRIGGER AS $$
+DECLARE
+    stock_actual INT;
+BEGIN
+    SELECT stock INTO stock_actual FROM repuesto WHERE id_repuesto = NEW.id_repuesto;
 
-        # REPARACION (orden de trabajo): acá vive la falla reportada y el estado.
-        # "presupuesto_aprobado": Pendiente / Aceptado / Rechazado.
-        # "repuestos_usados": detalle de repuestos consumidos en esta orden.
-        self.reparaciones = [
-            {"id": 1001, "id_equipo": 1, "equipo": "Notebook Lenovo IdeaPad 3", "cliente": "García, Ana Maria",
-             "id_tecnico": 1, "tecnico": "Pérez, Gonzalo", "fecha": "2026-09-18",
-             "falla_reportada": "No enciende, pantalla negra", "diagnostico": "",
-             "estado": "En Diagnóstico", "presupuesto_aprobado": "Pendiente",
-             "estimado": 65000.00, "total": 0.00, "repuestos_usados": []},
-            {"id": 1002, "id_equipo": 2, "equipo": "PC Exo Ready", "cliente": "Martínez, Carlos",
-             "id_tecnico": 2, "tecnico": "Ríos, Mariana", "fecha": "2026-09-19",
-             "falla_reportada": "Lentitud extrema, posible disco dañado", "diagnostico": "",
-             "estado": "Esperando Repuesto", "presupuesto_aprobado": "Aceptado",
-             "estimado": 45000.00, "total": 77000.00, "repuestos_usados": []},
-            {"id": 1003, "id_equipo": 3, "equipo": "Impresora Epson L3210", "cliente": "López, Sofía",
-             "id_tecnico": 3, "tecnico": "Fernández, Esteban", "fecha": "2026-09-20",
-             "falla_reportada": "Atasco de papel y parpadea luz roja", "diagnostico": "Limpieza de rodillos realizada.",
-             "estado": "Terminado", "presupuesto_aprobado": "Aceptado",
-             "estimado": 25000.00, "total": 25000.00, "repuestos_usados": []}
-        ]
+    IF stock_actual IS NULL THEN
+        RAISE EXCEPTION 'El repuesto % no existe', NEW.id_repuesto;
+    END IF;
 
-    # =========================================================
-    # CLIENTE - ABM completo
-    # =========================================================
-    def obtener_clientes(self):
-        return self.clientes
+    IF stock_actual < NEW.cantidad THEN
+        RAISE EXCEPTION 'Stock insuficiente para el repuesto % (disponible: %, solicitado: %)',
+            NEW.id_repuesto, stock_actual, NEW.cantidad;
+    END IF;
 
-    def agregar_cliente(self, dni, nombre, telefono):
-        nuevo_id = (max((c["id"] for c in self.clientes), default=0)) + 1
-        nuevo = {"id": nuevo_id, "dni": dni, "nombre": nombre, "telefono": telefono}
-        self.clientes.append(nuevo)
-        return nuevo
+    UPDATE repuesto SET stock = stock - NEW.cantidad WHERE id_repuesto = NEW.id_repuesto;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
-    def modificar_cliente(self, id_cliente, dni, nombre, telefono):
-        for c in self.clientes:
-            if c["id"] == id_cliente:
-                c["dni"], c["nombre"], c["telefono"] = dni, nombre, telefono
-                return c
-        return None
+CREATE TRIGGER trg_validar_stock
+    BEFORE INSERT ON detalle_reparacion
+    FOR EACH ROW
+    EXECUTE FUNCTION fn_validar_y_descontar_stock();
 
-    def eliminar_cliente(self, id_cliente):
-        tiene_equipos = any(e["id_cliente"] == id_cliente for e in self.equipos)
-        if tiene_equipos:
-            raise ValueError("No se puede eliminar: el cliente tiene equipos registrados.")
-        self.clientes = [c for c in self.clientes if c["id"] != id_cliente]
+-- roles
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'admin_role') THEN
+        CREATE ROLE admin_role;
+    END IF;
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'tecnico_role') THEN
+        CREATE ROLE tecnico_role;
+    END IF;
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'recepcion_role') THEN
+        CREATE ROLE recepcion_role;
+    END IF;
+END $$;
 
-    # =========================================================
-    # EQUIPO
-    # =========================================================
-    def obtener_equipos(self):
-        return self.equipos
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO admin_role;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO admin_role;
 
-    def agregar_equipo(self, tipo, marca, modelo, serie, id_cliente, cliente_nombre):
-        nuevo_id = (max((e["id"] for e in self.equipos), default=0)) + 1
-        nuevo = {"id": nuevo_id, "tipo": tipo, "marca": marca, "modelo": modelo,
-                  "serie": serie, "id_cliente": id_cliente, "cliente": cliente_nombre}
-        self.equipos.append(nuevo)
-        return nuevo
+GRANT SELECT ON cliente, equipo, repuesto TO tecnico_role;
+GRANT SELECT, INSERT, UPDATE ON reparacion, detalle_reparacion TO tecnico_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO tecnico_role;
 
-    # =========================================================
-    # REPARACION (orden de trabajo)
-    # =========================================================
-    def obtener_reparaciones(self):
-        return self.reparaciones
+GRANT SELECT, INSERT, UPDATE ON cliente, equipo, reparacion TO recepcion_role;
+GRANT SELECT ON tecnico, repuesto TO recepcion_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO recepcion_role;
 
-    def agregar_reparacion(self, id_equipo, equipo_desc, cliente_nombre, id_tecnico, tecnico_nombre,
-                            fecha, falla_reportada, estimado):
-        nuevo_id = 1001 + len(self.reparaciones)
-        nueva = {"id": nuevo_id, "id_equipo": id_equipo, "equipo": equipo_desc, "cliente": cliente_nombre,
-                  "id_tecnico": id_tecnico, "tecnico": tecnico_nombre, "fecha": fecha,
-                  "falla_reportada": falla_reportada, "diagnostico": "", "estado": "Ingresada",
-                  "presupuesto_aprobado": "Pendiente", "estimado": estimado, "total": 0.00,
-                  "repuestos_usados": []}
-        self.reparaciones.append(nueva)
-        return nueva
+-- datos de prueba
+INSERT INTO cliente (dni, nombre, telefono) VALUES
+('35123456', 'Garcia, Ana Maria', '351-4567890'),
+('38987654', 'Martinez, Carlos', '351-6543210'),
+('32111222', 'Lopez, Sofia', '351-7890123'),
+('30456789', 'Fernandez, Luis', '351-2223344'),
+('37888999', 'Rodriguez, Carla', '351-5556677'),
+('33222111', 'Gomez, Pablo', '351-8889900'),
+('36555444', 'Alvarez, Marina', '351-1112233'),
+('31999888', 'Diaz, Ramiro', '351-4445566'),
+('39777666', 'Torres, Lucia', '351-7778899'),
+('34000111', 'Suarez, Diego', '351-9990011');
 
-    def puede_avanzar_estado(self, id_reparacion, nuevo_estado):
-        """Regla de negocio (minuta): valida que si el nuevo estado exige
-        presupuesto aceptado, la orden ya lo tenga. Devuelve (ok, mensaje)."""
-        rep = next((r for r in self.reparaciones if r["id"] == id_reparacion), None)
-        if rep is None:
-            return False, "La orden no existe."
-        if nuevo_estado in ESTADOS_QUE_REQUIEREN_PRESUPUESTO_ACEPTADO and rep["presupuesto_aprobado"] != "Aceptado":
-            return False, (
-                f"No se puede pasar la orden a '{nuevo_estado}' porque el presupuesto todavía "
-                f"está en estado '{rep['presupuesto_aprobado']}'. Primero debe marcarse como Aceptado."
-            )
-        return True, ""
+INSERT INTO tecnico (legajo, dni, nombre, apellido, especialidad, estado) VALUES
+('TEC-001', '33444555', 'Gonzalo', 'Perez', 'Hardware', 'Activo'),
+('TEC-002', '36777888', 'Mariana', 'Rios', 'Software', 'Activo'),
+('TEC-003', '40111222', 'Esteban', 'Fernandez', 'General', 'Inactivo'),
+('TEC-004', '38222333', 'Lucas', 'Molina', 'Electrónica', 'Activo'),
+('TEC-005', '35666777', 'Paula', 'Gimenez', 'Hardware', 'Activo'),
+('TEC-006', '37888099', 'Nadia', 'Sosa', 'Software', 'Activo'),
+('TEC-007', '39000111', 'Franco', 'Acosta', 'General', 'Activo'),
+('TEC-008', '34555666', 'Valeria', 'Nunez', 'Electrónica', 'Inactivo'),
+('TEC-009', '36111222', 'Sergio', 'Ramos', 'Hardware', 'Activo'),
+('TEC-010', '38999000', 'Camila', 'Ortiz', 'Software', 'Activo');
 
-    def actualizar_estado_reparacion(self, id_reparacion, nuevo_estado, nuevo_diagnostico):
-        ok, mensaje = self.puede_avanzar_estado(id_reparacion, nuevo_estado)
-        if not ok:
-            raise ValueError(mensaje)
-        for r in self.reparaciones:
-            if r["id"] == id_reparacion:
-                r["estado"] = nuevo_estado
-                r["diagnostico"] = nuevo_diagnostico
-                return r
-        return None
+INSERT INTO repuesto (codigo, descripcion, precio_unitario, stock, stock_minimo) VALUES
+('REP-001', 'Disco SSD Kingston 480GB SATA3', 45000.00, 8, 3),
+('REP-002', 'Memoria RAM DDR4 8GB 3200MHz', 32000.00, 12, 5),
+('REP-003', 'Fuente de Alimentacion LNC 600W', 58000.00, 1, 2),
+('REP-004', 'Pasta Termica Arctic MX-4 4g', 12000.00, 15, 4),
+('REP-005', 'Teclado USB Generico', 9000.00, 20, 5),
+('REP-006', 'Cargador Notebook 65W', 22000.00, 6, 2),
+('REP-007', 'Placa de Video GT 1030', 95000.00, 3, 1),
+('REP-008', 'Cooler CPU 120mm', 15000.00, 10, 3),
+('REP-009', 'Cable SATA 50cm', 3000.00, 25, 5),
+('REP-010', 'Bateria Notebook Generica', 48000.00, 4, 2);
 
-    def actualizar_presupuesto(self, id_reparacion, nuevo_valor):
-        for r in self.reparaciones:
-            if r["id"] == id_reparacion:
-                r["presupuesto_aprobado"] = nuevo_valor
-                return r
-        return None
+INSERT INTO equipo (tipo, marca, modelo, numero_serie, id_cliente) VALUES
+('Notebook', 'Lenovo', 'IdeaPad 3', 'NV123456', 1),
+('PC de Escritorio', 'Exo', 'Ready', 'EX987654', 2),
+('Impresora', 'Epson', 'L3210', 'EP456789', 3),
+('Notebook', 'HP', 'Pavilion 15', 'HP111222', 4),
+('PC de Escritorio', 'Genérica', 'Gamer', 'PC333444', 5),
+('All in One', 'Dell', 'Inspiron 24', 'DL555666', 6),
+('Notebook', 'Asus', 'Vivobook', 'AS777888', 7),
+('Impresora', 'HP', 'DeskJet 2775', 'HP999000', 8),
+('Notebook', 'Acer', 'Aspire 5', 'AC222333', 9),
+('PC de Escritorio', 'Genérica', 'Oficina', 'PC444555', 10);
 
-    def usar_repuesto_en_reparacion(self, id_reparacion, id_repuesto, cantidad):
-        """Regla de negocio (minuta): no se puede usar un repuesto sin stock
-        suficiente. Equivalente mock del trigger trg_validar_stock del SQL."""
-        rep = next((r for r in self.reparaciones if r["id"] == id_reparacion), None)
-        repuesto = next((x for x in self.repuestos if x["id"] == id_repuesto), None)
-        if rep is None or repuesto is None:
-            raise ValueError("Orden o repuesto inexistente.")
-        if repuesto["stock"] < cantidad:
-            raise StockInsuficienteError(
-                f"Stock insuficiente para '{repuesto['descripcion']}': "
-                f"disponible {repuesto['stock']}, solicitado {cantidad}."
-            )
-        repuesto["stock"] -= cantidad
-        rep["repuestos_usados"].append({
-            "id_repuesto": repuesto["id"], "descripcion": repuesto["descripcion"],
-            "cantidad": cantidad, "precio_unitario_aplicado": repuesto["precio"],
-        })
-        rep["total"] = rep.get("total", 0.0) + repuesto["precio"] * cantidad
-        return rep
+INSERT INTO reparacion (fecha_ingreso, falla_reportada, diagnostico, costo_estimado, costo_total, estado, presupuesto_aprobado, id_equipo, id_tecnico) VALUES
+('2026-09-18', 'No enciende, pantalla negra', NULL, 65000.00, 0.00, 'En Diagnóstico', 'Pendiente', 1, 1),
+('2026-09-19', 'Lentitud extrema, posible disco danado', NULL, 45000.00, 77000.00, 'Esperando Repuesto', 'Aceptado', 2, 2),
+('2026-09-20', 'Atasco de papel y parpadea luz roja', 'Limpieza de rodillos realizada.', 25000.00, 25000.00, 'Terminado', 'Aceptado', 3, 3),
+('2026-09-21', 'No carga la bateria', NULL, 48000.00, 0.00, 'Ingresada', 'Pendiente', 4, 1),
+('2026-09-22', 'Se apaga sola al rato de uso', NULL, 32000.00, 0.00, 'Ingresada', 'Pendiente', 5, 4),
+('2026-09-23', 'No da imagen en el monitor', 'Falla de fuente detectada.', 58000.00, 58000.00, 'En Reparación', 'Aceptado', 6, 5),
+('2026-09-24', 'Teclado no responde', NULL, 9000.00, 0.00, 'Ingresada', 'Pendiente', 7, 6),
+('2026-09-25', 'Imprime con rayas', NULL, 15000.00, 0.00, 'En Diagnóstico', 'Pendiente', 8, 3),
+('2026-09-26', 'Ruido en el cooler', NULL, 15000.00, 0.00, 'Ingresada', 'Pendiente', 9, 1),
+('2026-09-27', 'Cliente rechazo presupuesto', 'Costo de reparacion no conveniente.', 95000.00, 0.00, 'En Diagnóstico', 'Rechazado', 10, 2);
 
-    # =========================================================
-    # TECNICO - ABM completo
-    # =========================================================
-    def obtener_tecnicos(self):
-        return self.tecnicos
-
-    def agregar_tecnico(self, legajo, dni, nombre, apellido, especialidad, estado):
-        nuevo_id = (max((t["id"] for t in self.tecnicos), default=0)) + 1
-        nuevo = {"id": nuevo_id, "legajo": legajo, "dni": dni, "nombre": nombre,
-                  "apellido": apellido, "especialidad": especialidad, "estado": estado}
-        self.tecnicos.append(nuevo)
-        return nuevo
-
-    def modificar_tecnico(self, id_tecnico, legajo, dni, nombre, apellido, especialidad, estado):
-        for t in self.tecnicos:
-            if t["id"] == id_tecnico:
-                t.update(legajo=legajo, dni=dni, nombre=nombre, apellido=apellido,
-                         especialidad=especialidad, estado=estado)
-                return t
-        return None
-
-    def eliminar_tecnico(self, id_tecnico):
-        tiene_ordenes = any(r["id_tecnico"] == id_tecnico for r in self.reparaciones)
-        if tiene_ordenes:
-            raise ValueError("No se puede eliminar: el técnico tiene órdenes de trabajo asignadas.")
-        self.tecnicos = [t for t in self.tecnicos if t["id"] != id_tecnico]
-
-    # =========================================================
-    # REPUESTO - ABM completo
-    # =========================================================
-    def obtener_repuestos(self):
-        return self.repuestos
-
-    def agregar_repuesto(self, codigo, descripcion, precio, stock, minimo):
-        nuevo_id = (max((r["id"] for r in self.repuestos), default=0)) + 1
-        nuevo = {"id": nuevo_id, "codigo": codigo, "descripcion": descripcion,
-                  "precio": float(precio), "stock": int(stock), "minimo": int(minimo)}
-        self.repuestos.append(nuevo)
-        return nuevo
-
-    def modificar_repuesto(self, id_repuesto, codigo, descripcion, precio, stock, minimo):
-        for r in self.repuestos:
-            if r["id"] == id_repuesto:
-                r.update(codigo=codigo, descripcion=descripcion, precio=float(precio),
-                         stock=int(stock), minimo=int(minimo))
-                return r
-        return None
-
-    def eliminar_repuesto(self, id_repuesto):
-        usado = any(any(u["id_repuesto"] == id_repuesto for u in r["repuestos_usados"])
-                    for r in self.reparaciones)
-        if usado:
-            raise ValueError("No se puede eliminar: el repuesto ya fue utilizado en alguna orden.")
-        self.repuestos = [r for r in self.repuestos if r["id"] != id_repuesto]
+INSERT INTO detalle_reparacion (id_reparacion, id_repuesto, cantidad, precio_unitario_aplicado) VALUES
+(2, 1, 1, 45000.00),
+(2, 4, 1, 12000.00),
+(3, 9, 2, 3000.00),
+(6, 3, 1, 58000.00);
