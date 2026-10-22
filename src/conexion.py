@@ -1,18 +1,11 @@
-"""
-Módulo de Conexión a la Base de Datos - TecnoService PC
-Motor: PostgreSQL (según Requisitos Técnicos Obligatorios de la cátedra).
-
-Este módulo centraliza la apertura de conexiones para que acceso_datos.py
-no tenga que conocer los parámetros de conexión ni la librería usada.
-"""
-
 import psycopg2
 import psycopg2.extras
 
 
 class ConexionBD:
-    def __init__(self, host="localhost", puerto="5432", base_datos="tecnoservice",
-                 usuario="postgres", contrasena=""):
+    # datos de la base en Neon
+    def __init__(self, host="ep-muddy-bread-b4m17p0l-pooler.c-6.us-east-2.aws.neon.tech", puerto="5432", base_datos="neondb",
+                 usuario="neondb_owner", contrasena="npg_qzOWlsw7P5Ki"):
         self.host = host
         self.puerto = puerto
         self.base_datos = base_datos
@@ -20,7 +13,6 @@ class ConexionBD:
         self.contrasena = contrasena
 
     def obtener_conexion(self):
-        """Abre y devuelve una conexión a PostgreSQL, o None si falla."""
         try:
             conn = psycopg2.connect(
                 host=self.host,
@@ -28,10 +20,10 @@ class ConexionBD:
                 dbname=self.base_datos,
                 user=self.usuario,
                 password=self.contrasena,
+                sslmode="require",
                 cursor_factory=psycopg2.extras.RealDictCursor,
             )
             return conn
         except psycopg2.Error as e:
             print(f"Error al conectar con la base de datos: {e}")
             return None
-
