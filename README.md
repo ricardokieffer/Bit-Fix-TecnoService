@@ -28,6 +28,10 @@ Algunas reglas que el sistema hace cumplir:
   <img src="Docs/capturas/ingresos.png" alt="Pestaña Ingresos" width="49%">
   <img src="Docs/capturas/repuestos.png" alt="Pestaña Repuestos" width="49%">
 </p>
+<p>
+  <img src="Docs/capturas/clientes.png" alt="Pestaña Clientes" width="49%">
+  <img src="Docs/capturas/tecnicos.png" alt="Pestaña Técnicos" width="49%">
+</p>
 
 ## Tecnologías
 
@@ -83,4 +87,3 @@ Proyecto integrador del módulo Programador de la Tecnicatura Superior en Desarr
 | Thiago Espinosa | Documentación y pruebas |
 
 **Contacto:** [LinkedIn](https://www.linkedin.com/in/ricardo-kieffer) · [GitHub](https://github.com/ricardokieffer)
-
