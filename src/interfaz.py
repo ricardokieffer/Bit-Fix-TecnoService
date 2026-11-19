@@ -59,7 +59,7 @@ class AplicacionTecnoService:
                                font=('Helvetica', 14, 'bold'), fg='white', bg='#1A365D')
         lbl_titulo.pack(side='left', padx=15, pady=10)
 
-        lbl_equipo = tk.Label(header_frame, text="Grupo Bit&Fix | COM B1",
+        lbl_equipo = tk.Label(header_frame, text="Desarrollado por Bit&Fix",
                                font=('Helvetica', 10, 'italic'), fg='#E2E8F0', bg='#1A365D')
         lbl_equipo.pack(side='right', padx=15, pady=10)
 
@@ -68,7 +68,7 @@ class AplicacionTecnoService:
         status_frame.pack(fill='x', side='bottom')
         lbl_status = tk.Label(
             status_frame,
-            text="Hito 3: conectado a PostgreSQL",
+            text="Base de datos: PostgreSQL",
             font=('Helvetica', 9), bg='#E2E8F0', fg='#4A5568'
         )
         lbl_status.pack(side='left', padx=10, pady=2)
