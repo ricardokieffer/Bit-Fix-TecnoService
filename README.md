@@ -63,7 +63,8 @@ El control de stock al usar un repuesto en una orden lo hace la base de datos co
 ## Cómo probarlo
 
 1. Instalar la librería: `pip install psycopg2-binary`
-2. Abrir una terminal en la carpeta `src`.
-3. Ejecutar: `python main.py`
+2. Configurar la conexión: copiar el archivo `.env.example` como `.env` (en la carpeta principal del proyecto) y completar los datos de la base.
+3. Abrir una terminal en la carpeta `src`.
+4. Ejecutar: `python main.py`
 
-La base de datos está en Neon y ya tiene los datos cargados. Los datos de conexión están en `conexion.py`. Para crear la base desde cero se puede ejecutar `sql/script_tecnoservice.sql`.
+Los datos de conexión no se suben al repositorio: el archivo `.env` está excluido en `.gitignore`. Para crear la base desde cero se puede ejecutar `sql/script_tecnoservice.sql` en una base PostgreSQL propia (por ejemplo, un proyecto gratuito de Neon).
